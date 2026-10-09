@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: {POSTGRES_USER: agent, POSTGRES_PASSWORD: agent, POSTGRES_DB: agentdb}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U agent -d agentdb" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements-dev.txt
+      - name: Unit, integration and Postgres tests
+        env:
+          TEST_POSTGRES_URL: postgresql://agent:agent@localhost:5432/agentdb
+        run: pytest -q
+      - name: Agent evals (gate)
+        run: python -m evals.run_evals --min-success 0.9
+      - uses: actions/upload-artifact@v4
+        with: {name: eval-report, path: evals/report.json}
+      - name: Build image
+        run: docker build -t commerce-agent:${{ github.sha }} .

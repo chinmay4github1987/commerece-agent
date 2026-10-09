@@ -1,0 +1,24 @@
+# Local stack that mirrors the k8s setup: API + Postgres checkpoints.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent
+      POSTGRES_DB: agentdb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agentdb"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      API_KEY: dev-key
+      LLM_PROVIDER: ${LLM_PROVIDER:-rules}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CHECKPOINT_URL: postgresql://agent:agent@postgres:5432/agentdb
+    depends_on:
+      postgres:
+        condition: service_healthy
